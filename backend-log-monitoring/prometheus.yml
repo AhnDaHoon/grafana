@@ -1,0 +1,40 @@
+# ────────────────────────────────
+# Prometheus 설정 파일
+# ────────────────────────────────
+global:
+  scrape_interval: 15s
+  # ▶ 메트릭 수집 주기 (기본 15초)
+  evaluation_interval: 15s
+  # ▶ 알림 규칙 평가 주기
+  external_labels:
+    monitor: 'backend-monitoring'
+    # ▶ 외부 시스템에 전송될 때 추가될 라벨
+
+# ────────────────────────────────
+# 메트릭 수집 대상 설정
+# ────────────────────────────────
+scrape_configs:
+  # ── Prometheus 자체 모니터링 ──
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        # ▶ Prometheus 자체의 메트릭 수집
+
+  # ── Spring Boot 애플리케이션 ──
+  - job_name: 'backend-app'
+    metrics_path: '/actuator/prometheus'
+    # ▶ Spring Boot Actuator의 Prometheus 엔드포인트
+    static_configs:
+      - targets: ['backend:8080']
+        # ▶ docker-compose의 backend 서비스 이름 사용
+        labels:
+          application: 'backend-app'
+          # ▶ Grafana에서 필터링할 때 사용할 라벨
+
+  # ── cAdvisor (컨테이너 메트릭) ──
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        # ▶ cAdvisor가 수집하는 Docker 컨테이너 리소스 메트릭
+        labels:
+          monitor: 'container-metrics'

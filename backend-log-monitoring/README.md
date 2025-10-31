@@ -265,3 +265,27 @@ Windows의 경우 Docker Desktop 설정에서 공유 드라이브 설정을 확�
 - [Grafana Alloy Documentation](https://grafana.com/docs/alloy/latest/)
 - [LogQL Query Language](https://grafana.com/docs/loki/latest/logql/)
 - [Spring Boot Logging](https://docs.spring.io/spring-boot/docs/current/reference/html/features.html#features.logging)
+
+
+# 프로메테우스
+
+- CPU 사용률
+process_cpu_usage{application="backend-app"}
+
+- 시스템 CPU
+system_cpu_usage{application="backend-app"}
+
+- JVM 전체 메모리
+jvm_memory_used_bytes{application="backend-app"}
+
+- Heap 메모리만
+jvm_memory_used_bytes{application="backend-app",area="heap"}
+
+- 스레드 수
+jvm_threads_live_threads{application="backend-app"}
+
+- 컨테이너 메모리 (MB 단위)
+container_memory_usage_bytes{name="backend-app"} / 1024 / 1024
+
+- 컨테이너 CPU 사용률 (%)
+rate(container_cpu_usage_seconds_total{name="backend-app"}[1m]) * 100
