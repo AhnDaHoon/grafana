@@ -1,0 +1,47 @@
+# Build artifacts
+build/
+out/
+target/
+.gradle/
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+
+# Alloy and Grafana configs
+alloy-config.alloy
+loki-config.yaml
+grafana-datasources.yaml
+
+# Documentation
+README.md
+docs/

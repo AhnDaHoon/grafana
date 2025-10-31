@@ -1,0 +1,104 @@
+# ────────────────────────────────
+# Loki 기본 설정
+# ────────────────────────────────
+
+auth_enabled: false
+# ▶ 인증 비활성화 (기본적으로 인증 없이 접근 가능)
+#   Grafana 등의 외부 도구에서 접근 시 인증 절차를 생략함
+
+server:
+  http_listen_port: 3100
+  # ▶ Loki HTTP 서버 포트 (기본: 3100)
+  grpc_listen_port: 9096
+  # ▶ gRPC 서버 포트 (내부 컴포넌트 간 통신에 사용)
+
+# ────────────────────────────────
+# 공통 설정 (저장소, 인스턴스 주소 등)
+# ────────────────────────────────
+common:
+  instance_addr: 127.0.0.1
+  # ▶ Loki 인스턴스의 로컬 주소
+  path_prefix: /loki
+  # ▶ Loki 데이터가 저장될 기본 경로 (chunks, rules 등이 이 안에 저장됨)
+
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      # ▶ 로그 청크(압축 저장된 로그 데이터)가 저장되는 경로
+      rules_directory: /loki/rules
+      # ▶ 룰 파일(알림 및 규칙)이 저장되는 경로
+
+  replication_factor: 1
+  # ▶ 데이터 복제 개수 (1이면 단일 인스턴스)
+
+  ring:
+    kvstore:
+      store: inmemory
+      # ▶ 분산 환경에서 노드 상태를 저장하는 키-값 저장소 유형
+      #    단일 인스턴스이므로 'inmemory' 사용
+
+# ────────────────────────────────
+# 쿼리 캐시 설정
+# ────────────────────────────────
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        # ▶ 쿼리 결과 캐시 활성화
+        max_size_mb: 100
+        # ▶ 캐시 메모리 최대 사용량 (MB 단위)
+
+# ────────────────────────────────
+# 스키마 설정 (데이터 저장 구조)
+# ────────────────────────────────
+schema_config:
+  configs:
+    - from: 2020-10-24
+      # ▶ 스키마 적용 시작 날짜
+      store: tsdb
+      # ▶ Loki의 TSDB(Time Series Database) 저장 방식 사용
+      object_store: filesystem
+      # ▶ 데이터 저장소 타입 (로컬 파일 시스템)
+      schema: v13
+      # ▶ Loki 스키마 버전 (v13은 최신 안정 버전 중 하나)
+      index:
+        prefix: index_
+        # ▶ 인덱스 파일 이름 접두어
+        period: 24h
+        # ▶ 인덱스 롤오버 주기 (24시간마다 새 인덱스 생성)
+
+# ────────────────────────────────
+# 제한 설정 (데이터 유효기간 등)
+# ────────────────────────────────
+limits_config:
+  reject_old_samples: true
+  # ▶ 너무 오래된 로그 샘플(데이터)을 거부
+  reject_old_samples_max_age: 168h
+  # ▶ 최대 허용 데이터 시차 (168시간 = 7일)
+  #    즉, 7일 이상 지난 로그는 수집 거부
+
+# ────────────────────────────────
+# Ruler (경보/알림 룰 설정)
+# ────────────────────────────────
+ruler:
+  storage:
+    type: local
+    # ▶ 룰 저장소 타입: 로컬 파일
+    local:
+      directory: /loki/rules
+      # ▶ 룰이 저장될 디렉토리
+  rule_path: /loki/rules-temp
+  # ▶ 임시 룰 파일이 저장되는 경로
+  alertmanager_url: http://localhost:9093
+  # ▶ Alertmanager의 URL (알림을 전달할 대상)
+  enable_api: true
+  # ▶ Ruler API 활성화 (룰을 HTTP API로 관리 가능)
+
+# ────────────────────────────────
+# 익명 통계 수집 비활성화
+# ────────────────────────────────
+analytics:
+  reporting_enabled: false
+  # ▶ Grafana Labs에 사용 통계(익명 데이터) 전송 비활성화
+  #    보안이나 사내망 환경에서는 false로 두는 것이 일반적

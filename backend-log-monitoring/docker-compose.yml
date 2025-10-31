@@ -1,0 +1,149 @@
+# ────────────────────────────────
+# Docker Compose 설정 파일
+# 구성 요소: Backend + Loki + Alloy + Grafana
+# ────────────────────────────────
+services:
+  # ────────────────────────────────
+  # 1️⃣ Backend Application (Spring Boot)
+  # ────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # ▶ 현재 디렉토리의 Dockerfile로 이미지 빌드
+    container_name: backend-app
+    ports:
+      - "8080:8080"
+      # ▶ 호스트 8080 → 컨테이너 8080 (Spring Boot 접근용)
+    volumes:
+      - backend-logs:/app/logs
+      # ▶ 컨테이너의 로그 디렉토리(/app/logs)를 호스트 볼륨에 마운트 (Alloy가 참조)
+    environment:
+      - SPRING_APPLICATION_NAME=backend-app
+      - JAVA_OPTS=-Xmx512m -Xms256m
+      # ▶ Java Heap 메모리 설정 (최대 512MB, 최소 256MB)
+    networks:
+      - monitoring
+      # ▶ Loki, Grafana, Alloy와 같은 네트워크에 연결 (로그 수집용)
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      # ▶ Spring Boot Actuator health endpoint로 헬스체크
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    # ▶ 수동 중지하지 않는 한 자동 재시작
+
+  # ────────────────────────────────
+  # 2️⃣ Loki (로그 수집 및 저장)
+  # ────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    user: root
+    ports:
+      - "3100:3100"
+      # ▶ 호스트 3100 → 컨테이너 3100 (Grafana에서 Loki 접근용)
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml
+      # ▶ Loki 설정 파일을 컨테이너 내부에 마운트
+      - loki-data:/loki
+      # ▶ Loki 데이터 디렉토리 (로그 저장소)
+    command: -config.file=/etc/loki/local-config.yaml
+    # ▶ Loki가 설정 파일을 직접 지정하여 실행
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      # ▶ Loki 준비 상태 확인용 endpoint
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    # ▶ Loki 컨테이너가 종료되어도 자동 재시작
+
+  # ────────────────────────────────
+  # 3️⃣ Alloy (로그 수집 Agent)
+  # ────────────────────────────────
+  alloy:
+    image: grafana/alloy:latest
+    container_name: alloy
+    ports:
+      - "12345:12345"
+      # ▶ Alloy의 HTTP 서버 접근 포트
+    volumes:
+      - ./alloy-config.alloy:/etc/alloy/config.alloy
+      # ▶ Alloy의 설정 파일을 컨테이너에 마운트
+      - backend-logs:/app/logs:ro
+      # ▶ Backend 로그 볼륨을 읽기 전용(:ro)으로 연결 (로그 수집 대상)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # ▶ Docker 컨테이너 메타데이터 접근용 (컨테이너 로그 모니터링 가능)
+    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+    # ▶ Alloy 실행 커맨드 (HTTP 서버 포트 지정 및 설정 파일 지정)
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+      - backend
+      # ▶ Loki 및 Backend가 먼저 실행된 후 Alloy 실행
+    restart: unless-stopped
+    # ▶ 오류나 종료 발생 시 자동 재시작
+
+  # ────────────────────────────────
+  # 4️⃣ Grafana (시각화 대시보드)
+  # ────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+      # ▶ 호스트 3000 → 컨테이너 3000 (Grafana 웹 UI 접근용)
+    volumes:
+      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      # ▶ Loki 데이터소스를 자동 등록하는 Grafana 프로비저닝 파일
+      - grafana-data:/var/lib/grafana
+      # ▶ Grafana 대시보드 및 설정 데이터 영구 저장
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # ▶ 기본 로그인 계정 (admin / admin)
+      - GF_USERS_ALLOW_SIGN_UP=false
+      # ▶ 신규 회원가입 비활성화
+      - GF_INSTALL_PLUGINS=
+      # ▶ 추가 플러그인 설치 비활성화 (원하면 여기서 정의 가능)
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+      # ▶ Loki가 실행된 후 Grafana 실행 (데이터소스 연결 위해)
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      # ▶ Grafana API 헬스체크 (정상 응답 확인)
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    # ▶ 수동 중지 전까지 재시작 유지
+
+# ────────────────────────────────
+# 데이터 영속화용 볼륨
+# ────────────────────────────────
+volumes:
+  backend-logs:
+    driver: local
+    # ▶ 백엔드 로그를 공유 및 저장 (Alloy에서 읽음)
+  loki-data:
+    driver: local
+    # ▶ Loki의 로그 데이터 저장소
+  grafana-data:
+    driver: local
+    # ▶ Grafana 대시보드 및 사용자 데이터 저장소
+
+# ────────────────────────────────
+# 공용 네트워크 설정
+# ────────────────────────────────
+networks:
+  monitoring:
+    driver: bridge
+    # ▶ 동일 브릿지 네트워크 상에서 모든 서비스 통신 가능

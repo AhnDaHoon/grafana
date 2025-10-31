@@ -1,0 +1,62 @@
+// Alloy 설정 파일
+// Docker 컨테이너 로그 수집 with 레이블
+
+// Docker 컨테이너 디스커버리
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// 레이블 재지정 규칙 (Docker 메타데이터를 레이블로 변환)
+discovery.relabel "docker" {
+  targets = discovery.docker.containers.targets
+
+  // 컨테이너 이름을 레이블로 추가
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+  }
+
+  // 컨테이너 ID를 레이블로 추가
+  rule {
+    source_labels = ["__meta_docker_container_id"]
+    target_label  = "container_id"
+  }
+
+  // Docker Compose 서비스 이름을 레이블로 추가
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  // 로그 스트림 (stdout/stderr)을 레이블로 추가
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+
+  // job 레이블 추가 (필수)
+  rule {
+    target_label = "job"
+    replacement  = "docker"
+  }
+}
+
+// Docker 로그 수집
+loki.source.docker "default" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker.output
+  forward_to = [loki.write.local.receiver]
+}
+
+// Loki로 로그 전송
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// 자체 로깅 설정
+logging {
+  level  = "info"
+  format = "logfmt"
+}
