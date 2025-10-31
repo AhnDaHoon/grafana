@@ -1,0 +1,50 @@
+// Alloy configuration for log collection
+
+// Loki client configuration
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// Local file log collection
+local.file_match "app_logs" {
+  path_targets = [{
+    __path__ = "/var/log/app/*.log",
+  }]
+}
+
+// Log processing and forwarding
+loki.source.file "app_logs" {
+  targets    = local.file_match.app_logs.targets
+  forward_to = [loki.process.parse_logs.receiver]
+}
+
+// Log parsing and labeling
+loki.process "parse_logs" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.regex {
+    expression = "^(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}) \\[(?P<thread>.*?)\\] (?P<level>\\w+)\\s+(?P<logger>.*?) - (?P<message>.*)"
+  }
+
+  stage.labels {
+    values = {
+      level  = "",
+      thread = "",
+      logger = "",
+    }
+  }
+
+  stage.timestamp {
+    source = "timestamp"
+    format = "2006-01-02 15:04:05.000"
+  }
+
+  stage.static_labels {
+    values = {
+      job = "demo-app",
+      env = "docker",
+    }
+  }
+}

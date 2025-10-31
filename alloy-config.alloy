@@ -1,0 +1,21 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.source.file "spring_logs" {
+  targets = [
+    {
+      __path__ = "/app/logs/application.log",
+      job      = "springboot",
+      app      = "demo-app",
+    },
+  ]
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
